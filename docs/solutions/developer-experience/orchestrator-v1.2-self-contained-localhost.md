@@ -111,6 +111,7 @@ Claude: claude login manually; API key in shell env
 
 - Architecture index: `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md` (V1.2 delta summary)
 - PTY/Tokio blocking and pipe-closed UX: `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`
+- V1.3 UI (Svelte effect loop, launcher remount, headless browse): `docs/solutions/ui-bugs/orchestrator-v1.3-svelte-effect-loop-and-launcher-remount.md`
 - V1.1 requirements (PTY objectives baseline): `docs/brainstorms/2026-05-30-agent-orchestrator-v1.1-requirements.md`
 - V1.1 plan: `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`
 - V1.2 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.2-requirements.md`

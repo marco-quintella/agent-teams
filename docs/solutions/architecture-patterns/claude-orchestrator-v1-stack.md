@@ -97,9 +97,9 @@ Launch is **idempotent-guarded**: second launch returns **409** if sessions alre
 ### Web UI
 
 - API client: `web/src/lib/api/client.ts` — `VITE_API_BASE` empty in prod (same origin).
-- State: Svelte stores in `web/src/lib/stores/orchestrator.ts` + WS merge; `resumeTeamIfStored()` restores the last team from `localStorage` after reload.
-- Launcher: separate `launchBusy` / `messageBusy` flags; kanban column counts and `{#key}` remount for dnd sync.
-- Kanban: `svelte-dnd-action`; PATCH on column drop.
+- State: Svelte stores in `web/src/lib/stores/orchestrator.ts` + WS merge; team selection is server-backed (`GET /api/teams`) — no `localStorage` resume (V1.3).
+- Launcher: saved teams list, selected vs create-new modes, `launchBusy` / `messageBusy`, hybrid path + `POST /api/setup/browse-directory` (`rfd`, 503 when no GUI).
+- Kanban: `svelte-dnd-action`; PATCH on column drop; store → columns sync uses `$effect` + `untrack()` to avoid Svelte 5 effect loops — see `docs/solutions/ui-bugs/orchestrator-v1.3-svelte-effect-loop-and-launcher-remount.md`.
 
 ### Commits and merge
 

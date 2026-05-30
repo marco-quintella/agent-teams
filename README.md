@@ -4,7 +4,7 @@ Local control plane for Claude Code agent teams with a web kanban UI.
 
 ## Status
 
-V1 control plane + **V1.1** session hardening + **V1.2** self-contained localhost (Settings, doctor, single-process serve):
+V1 control plane + **V1.1** session hardening + **V1.2** self-contained localhost + **V1.3** operator workspace (team history, folder browse, default model):
 
 - `crates/orchestrator-core` — domain, SQLite, supervisor, ATOP ingestor, Claude settings
 - `crates/orchestrator-server` — REST API, WebSocket, `serve` command
@@ -75,6 +75,18 @@ Mount or inject Claude credentials the same way you would for Claude Code in Doc
 
 API keys saved in Settings are encrypted at rest (local `.data/orchestrator.key` + SQLite). Do not commit `.data/`.
 
+## V1.3 operator workspace (localhost)
+
+- **Saved teams** — Board sidebar lists teams from SQLite; select one and **Launch** / **Stop** without re-entering config.
+- **Browse…** — When creating a team, pick a project folder via native dialog (or type the path).
+- **Default model** — Settings → default model (`sonnet`, `opus`, `haiku`, custom, or CLI default); passed as `--model` to each `claude` session on launch.
+
+### V1.3 manual checks
+
+1. Create a team, reload the page — team appears in **Saved teams**; select and launch.
+2. **Browse…** fills project path (requires desktop display; headless/CI falls back to typed path).
+3. Set model in Settings, launch — verify `claude` argv includes `--model` (maintainer machine).
+
 ## V1.2 manual acceptance (localhost)
 
 1. `.\scripts\dev.ps1` (or build web + `cargo run -p orchestrator-server -- serve` with `web/dist` present).
@@ -102,7 +114,9 @@ In Settings, choose **API key**, paste your OpenRouter key, set base URL to `htt
 - Requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1-requirements.md`
 - V1.1 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.1-requirements.md`
 - V1.2 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.2-requirements.md`
-- Plans: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`, `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`, `docs/plans/2026-05-30-003-feat-agent-orchestrator-v1.2-plan.md`
+- V1.3 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.3-requirements.md`
+- Plans: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`, `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`, `docs/plans/2026-05-30-003-feat-agent-orchestrator-v1.2-plan.md`, `docs/plans/2026-05-30-004-feat-agent-orchestrator-v1.3-plan.md`
 - Architecture: `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`
 - V1.2 operator guide (Settings, single-serve, lead autonomy): `docs/solutions/developer-experience/orchestrator-v1.2-self-contained-localhost.md`
 - V1.1 troubleshooting (API hang / PTY): `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`
+- V1.3 troubleshooting (Svelte UI freeze, browse in headless): `docs/solutions/ui-bugs/orchestrator-v1.3-svelte-effect-loop-and-launcher-remount.md`
