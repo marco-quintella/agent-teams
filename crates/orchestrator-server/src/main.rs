@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
-mod cli;
+use orchestrator_server::config::ServerConfig;
 
 #[derive(Parser)]
 #[command(name = "orchestrator-server")]
@@ -28,6 +28,8 @@ enum Commands {
     Plugins,
     /// Print build info and Claude CLI availability
     Doctor,
+    /// Start the HTTP API and WebSocket server
+    Serve,
 }
 
 #[tokio::main]
@@ -39,10 +41,11 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Commands::Run { file } => cli::run_workflow(file).await?,
-        Commands::Validate { file } => cli::validate_workflow(file).await?,
-        Commands::Plugins => cli::list_plugins().await?,
-        Commands::Doctor => cli::doctor().await?,
+        Commands::Run { file } => orchestrator_server::cli::run_workflow(file).await?,
+        Commands::Validate { file } => orchestrator_server::cli::validate_workflow(file).await?,
+        Commands::Plugins => orchestrator_server::cli::list_plugins().await?,
+        Commands::Doctor => orchestrator_server::cli::doctor().await?,
+        Commands::Serve => orchestrator_server::serve::run(ServerConfig::from_env()).await?,
     }
 
     Ok(())
