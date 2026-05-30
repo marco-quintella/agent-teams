@@ -48,6 +48,19 @@ export interface Team {
   created_at: string;
 }
 
+export interface DoctorResponse {
+  orchestrator_version: string;
+  cli: { found: boolean; version: string | null };
+  credentials: { mode: string; ready: boolean; hint: string };
+}
+
+export interface ClaudeSettingsView {
+  credential_mode: string;
+  api_key_masked: string | null;
+  api_base_url: string | null;
+  updated_at: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${apiBase}${path}`, {
     headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
@@ -117,6 +130,29 @@ export const api = {
 
   listAgentRuns: (teamId: string) =>
     request<AgentRun[]>(`/api/teams/${teamId}/agent-runs`),
+
+  doctor: () => request<DoctorResponse>('/api/setup/doctor'),
+
+  getClaudeSettings: () => request<ClaudeSettingsView>('/api/setup/claude-settings'),
+
+  patchClaudeSettings: (body: {
+    credential_mode: string;
+    api_key?: string;
+    api_base_url?: string;
+  }) =>
+    request<ClaudeSettingsView>('/api/setup/claude-settings', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  claudeLogin: () =>
+    request<{ ok: boolean; message: string }>('/api/setup/claude-login', { method: 'POST' }),
+
+  installClaude: (confirm: boolean) =>
+    request<{ ok: boolean; command: string; output: string }>('/api/setup/install-claude', {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    }),
 };
 
 export function wsUrl(): string {

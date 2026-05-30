@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '../api/client';
   import {
     connectWs,
@@ -7,6 +8,20 @@
     loadTeam,
     teamId,
   } from '../stores/orchestrator';
+
+  let credentialsReady = $state(false);
+  let doctorHint = $state('');
+
+  onMount(async () => {
+    try {
+      const d = await api.doctor();
+      credentialsReady = d.credentials.ready && d.cli.found;
+      doctorHint = d.credentials.hint;
+    } catch {
+      credentialsReady = false;
+      doctorHint = 'Could not reach doctor API.';
+    }
+  });
 
   let projectPath = $state('');
   let teamName = $state('Alpha team');
@@ -88,6 +103,11 @@
 
 <section class="launcher">
   <h2>Team launcher</h2>
+  {#if !credentialsReady}
+    <p class="warn">
+      Claude not ready: {doctorHint} Open <strong>Settings</strong> to configure credentials.
+    </p>
+  {/if}
   <label>
     Project path
     <input bind:value={projectPath} placeholder="C:\path\to\repo" />
@@ -105,7 +125,11 @@
     <label>Worker <input bind:value={workerName} /></label>
   </div>
   <div class="actions">
-    <button type="button" disabled={launchBusy || !projectPath} onclick={createAndLaunch}>
+    <button
+      type="button"
+      disabled={launchBusy || !projectPath || !credentialsReady}
+      onclick={createAndLaunch}
+    >
       {launchBusy ? 'Launching…' : 'Launch team'}
     </button>
     <button type="button" disabled={launchBusy || !$teamId} onclick={stopTeam}>Stop team</button>
@@ -178,5 +202,13 @@
   }
   code {
     font-size: 0.75rem;
+  }
+  .warn {
+    font-size: 0.8rem;
+    color: #f0d090;
+    background: #3a2a10;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin: 0;
   }
 </style>

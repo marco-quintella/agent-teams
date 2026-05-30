@@ -3,6 +3,7 @@
   import { api } from './lib/api/client';
   import AgentStatusList from './lib/components/AgentStatusList.svelte';
   import KanbanBoard from './lib/components/KanbanBoard.svelte';
+  import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import TeamLauncher from './lib/components/TeamLauncher.svelte';
   import {
     connectionStatus,
@@ -14,6 +15,7 @@
   } from './lib/stores/orchestrator';
 
   let health = $state<{ claude_on_path: boolean; profile: string } | null>(null);
+  let view = $state<'board' | 'settings'>('board');
 
   const showGitWarning = $derived($launched && $members.length > 1);
 
@@ -37,6 +39,14 @@
       </span>
     {/if}
     <span class="badge ws-{$connectionStatus}">ws: {$connectionStatus}</span>
+    <nav class="nav">
+      <button type="button" class:active={view === 'board'} onclick={() => (view = 'board')}>
+        Board
+      </button>
+      <button type="button" class:active={view === 'settings'} onclick={() => (view = 'settings')}>
+        Settings
+      </button>
+    </nav>
   </header>
 
   <aside class="banner">
@@ -53,19 +63,23 @@
     <aside class="error">{$lastError}</aside>
   {/if}
 
-  <main>
-    <div class="sidebar">
-      <TeamLauncher />
-      <AgentStatusList />
-    </div>
-    <div class="board">
-      {#if $teamId}
-        <KanbanBoard />
-      {:else}
-        <p class="hint">Create and launch a team to open the kanban board.</p>
-      {/if}
-    </div>
-  </main>
+  {#if view === 'settings'}
+    <SettingsPanel />
+  {:else}
+    <main>
+      <div class="sidebar">
+        <TeamLauncher />
+        <AgentStatusList />
+      </div>
+      <div class="board">
+        {#if $teamId}
+          <KanbanBoard />
+        {:else}
+          <p class="hint">Create and launch a team to open the kanban board.</p>
+        {/if}
+      </div>
+    </main>
+  {/if}
 </div>
 
 <style>
@@ -91,6 +105,24 @@
     margin: 0;
     font-size: 1.35rem;
     flex: 1;
+  }
+  .nav {
+    display: flex;
+    gap: 0.35rem;
+  }
+  .nav button {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid #3a4458;
+    background: #252a35;
+    color: #b8c0cc;
+    cursor: pointer;
+  }
+  .nav button.active {
+    background: #3d6ae8;
+    color: #fff;
+    border-color: #3d6ae8;
   }
   .badge {
     font-size: 0.75rem;
