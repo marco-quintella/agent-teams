@@ -466,6 +466,7 @@ Multi-user SaaS with org billing, built-in editor, replacing Claude CLI.
 
 ## Sources and Research
 
+- Implementation learning: `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`
 - Origin: `docs/brainstorms/2026-05-30-agent-orchestrator-v1-requirements.md`
 - Existing code: `src/agents/claude_code.rs`, `src/config/workflow.rs`, `src/cli/commands.rs` (stub)
 - External: [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams), reference product [agent-teams-ai](https://github.com/777genius/agent-teams-ai)

@@ -94,3 +94,4 @@ Mount or inject Claude credentials the same way you would for Claude Code in Doc
 
 - Requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1-requirements.md`
 - Plan: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`
+- Architecture (implemented V1): `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`

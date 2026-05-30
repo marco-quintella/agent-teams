@@ -132,3 +132,8 @@ Everything in R1–R16 (R13 = dev profile; R15–R16 = Docker/VPS profile).
 ## Outstanding Questions
 
 None blocking planning—all resolved in `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`.
+
+## Related
+
+- Plan: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`
+- Implemented architecture: `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`

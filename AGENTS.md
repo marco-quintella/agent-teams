@@ -33,8 +33,9 @@ Invoke that skill (or apply it directly) for every commit request.
 
 - Product/requirements: `docs/brainstorms/`
 - Implementation plan: `docs/plans/`
+- Documented solutions: `docs/solutions/` — past bugs, architecture, and workflow learnings by category (YAML frontmatter: `module`, `tags`, `problem_type`); relevant when implementing or debugging in documented areas
 - Rust workspace: `crates/orchestrator-core`, `crates/orchestrator-server`
-- UI (planned): `web/` (Svelte + Vite)
+- UI: `web/` (Svelte + Vite)
 
 ## Build (Windows)
 
