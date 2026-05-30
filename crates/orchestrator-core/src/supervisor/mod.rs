@@ -216,6 +216,35 @@ impl Supervisor {
         member_ids.iter().any(|id| self.sessions.contains_key(id))
     }
 
+    /// Marks DB agent runs as stopped when no in-memory PTY session exists (e.g. after server restart).
+    pub async fn reconcile_runs_without_sessions<S: Store + ?Sized>(
+        &self,
+        store: &S,
+        events: &EventBus,
+        members: &[TeamMember],
+    ) -> anyhow::Result<()> {
+        for member in members {
+            if self.sessions.contains_key(&member.id) {
+                continue;
+            }
+            let Some(mut run) = store.get_agent_run_for_member(&member.id).await? else {
+                continue;
+            };
+            if !matches!(
+                run.status,
+                AgentRunStatus::Running | AgentRunStatus::Starting
+            ) {
+                continue;
+            }
+            run.status = AgentRunStatus::Stopped;
+            run.stopped_at = Some(Utc::now());
+            run.updated_at = Utc::now();
+            store.upsert_agent_run(&run).await?;
+            events.publish(OrchestratorEvent::AgentRunUpdated { run });
+        }
+        Ok(())
+    }
+
     /// Stops every live session (used before launch to avoid orphaned Claude processes).
     pub async fn stop_all_sessions<S: Store + ?Sized>(
         &self,

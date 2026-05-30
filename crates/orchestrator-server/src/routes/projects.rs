@@ -18,12 +18,12 @@ async fn create_project(
     State(state): State<AppState>,
     Json(body): Json<CreateProjectBody>,
 ) -> Result<Json<orchestrator_core::Project>, (StatusCode, String)> {
-    AppState::validate_project_path(&body.root_path)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let root_path = orchestrator_core::expand_tilde_path(&body.root_path);
+    AppState::validate_project_path(&root_path).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let project = state
         .store
-        .create_project(&body.root_path)
+        .create_project(&root_path)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

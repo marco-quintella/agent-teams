@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -136,8 +136,15 @@ impl AppState {
             .await
             .map_err(LaunchError::Internal)?;
 
-        let project_root = Path::new(&project.root_path);
-        std::fs::create_dir_all(project_root).map_err(|e| LaunchError::Internal(e.into()))?;
+        let project_root =
+            PathBuf::from(orchestrator_core::expand_tilde_path(&project.root_path));
+        if !project_root.is_dir() {
+            return Err(LaunchError::BadRequest(format!(
+                "project path does not exist: {}",
+                project_root.display()
+            )));
+        }
+        std::fs::create_dir_all(&project_root).map_err(|e| LaunchError::Internal(e.into()))?;
 
         let tasks = self
             .store
@@ -147,14 +154,14 @@ impl AppState {
         let task_count = tasks.len();
 
         for member in &members {
-            let ws = MemberWorkspace::new(project_root, team_id, &member.id);
+            let ws = MemberWorkspace::new(&project_root, team_id, &member.id);
             ws.ensure().await.map_err(|e| LaunchError::Internal(e.into()))?;
 
             self.supervisor
                 .spawn_member(
                     self.store.as_ref(),
                     &self.events,
-                    project_root,
+                    &project_root,
                     team_id,
                     &team.provisioning_prompt,
                     member,
@@ -218,20 +225,36 @@ impl AppState {
             .map_err(MessageError::Other)?;
         let envelope = format_objective_envelope(&tasks, text);
         let supervisor = Arc::clone(&self.supervisor);
+        let members_for_delivery = members.clone();
 
-        tokio::task::spawn_blocking(move || supervisor.deliver_lead_message(&members, &envelope))
-            .await
-            .map_err(|e| {
-                MessageError::Other(anyhow::anyhow!("message delivery task join failed: {e}"))
-            })?
-            .map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("not running") || msg.contains("closed") {
-                    MessageError::LeadSessionNotRunning(msg)
-                } else {
-                    MessageError::Other(e)
-                }
-            })?;
+        let deliver_result = tokio::task::spawn_blocking(move || {
+            supervisor.deliver_lead_message(&members_for_delivery, &envelope)
+        })
+        .await
+        .map_err(|e| {
+            MessageError::Other(anyhow::anyhow!("message delivery task join failed: {e}"))
+        })?;
+
+        if let Err(e) = deliver_result {
+            let msg = e.to_string();
+            if msg.contains("not running") || msg.contains("closed") {
+                self.supervisor
+                    .reconcile_runs_without_sessions(
+                        self.store.as_ref(),
+                        &self.events,
+                        &members,
+                    )
+                    .await
+                    .map_err(MessageError::Other)?;
+                self.events.publish(orchestrator_core::OrchestratorEvent::TeamUpdated {
+                    team_id: team_id.to_string(),
+                });
+                return Err(MessageError::LeadSessionNotRunning(
+                    "lead session is not running — relaunch the team".into(),
+                ));
+            }
+            return Err(MessageError::Other(e));
+        }
 
         Ok(())
     }
