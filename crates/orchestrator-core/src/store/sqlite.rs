@@ -5,6 +5,7 @@ use sqlx::Row;
 use std::str::FromStr;
 
 use super::Store;
+use crate::claude_settings::{settings_row_id, CredentialMode, ClaudeSettings};
 use crate::domain::{
     AgentRun, AgentRunStatus, MemberRole, Project, Task, TaskActor, TaskEvent, TaskStatus, Team,
     TeamMember, new_id,
@@ -346,6 +347,54 @@ impl Store for SqliteStore {
         .await?;
 
         row.map(|r| Self::row_to_agent_run(r)).transpose()
+    }
+
+    async fn get_claude_settings(&self) -> anyhow::Result<ClaudeSettings> {
+        let row = sqlx::query(
+            "SELECT credential_mode, api_key_ciphertext, api_base_url, updated_at
+             FROM claude_settings WHERE id = ?",
+        )
+        .bind(settings_row_id())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(r) = row else {
+            return Ok(ClaudeSettings {
+                credential_mode: CredentialMode::CliLogin,
+                api_key_ciphertext: None,
+                api_base_url: None,
+                updated_at: Utc::now(),
+            });
+        };
+
+        let mode_str: String = r.get("credential_mode");
+        Ok(ClaudeSettings {
+            credential_mode: CredentialMode::parse(&mode_str)
+                .ok_or_else(|| anyhow::anyhow!("invalid credential_mode: {mode_str}"))?,
+            api_key_ciphertext: r.get("api_key_ciphertext"),
+            api_base_url: r.get("api_base_url"),
+            updated_at: Self::parse_dt(r.get::<String, _>("updated_at").as_str())?,
+        })
+    }
+
+    async fn upsert_claude_settings(&self, settings: &ClaudeSettings) -> anyhow::Result<()> {
+        sqlx::query(
+            "INSERT INTO claude_settings (id, credential_mode, api_key_ciphertext, api_base_url, updated_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               credential_mode = excluded.credential_mode,
+               api_key_ciphertext = excluded.api_key_ciphertext,
+               api_base_url = excluded.api_base_url,
+               updated_at = excluded.updated_at",
+        )
+        .bind(settings_row_id())
+        .bind(settings.credential_mode.as_str())
+        .bind(&settings.api_key_ciphertext)
+        .bind(&settings.api_base_url)
+        .bind(settings.updated_at.to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }
 

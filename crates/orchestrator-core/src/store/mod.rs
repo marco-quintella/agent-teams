@@ -2,6 +2,7 @@ mod sqlite;
 
 use chrono::Utc;
 use async_trait::async_trait;
+use crate::claude_settings::ClaudeSettings;
 use crate::domain::{
     AgentRun, AgentRunStatus, MemberRole, Project, Task, TaskActor, TaskEvent, TaskStatus, Team,
     TeamMember, new_id,
@@ -76,6 +77,10 @@ pub trait Store: Send + Sync {
         &self,
         team_member_id: &str,
     ) -> anyhow::Result<Option<AgentRun>>;
+
+    async fn get_claude_settings(&self) -> anyhow::Result<ClaudeSettings>;
+
+    async fn upsert_claude_settings(&self, settings: &ClaudeSettings) -> anyhow::Result<()>;
 }
 
 /// Creates a new agent run row for a team member.

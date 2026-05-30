@@ -2,6 +2,7 @@
 
 pub mod agents;
 pub mod atop;
+pub mod claude_settings;
 pub mod config;
 pub mod domain;
 pub mod error;
@@ -26,5 +27,10 @@ pub use domain::{
 pub use state::ExecutionContext;
 pub use atop::{AtopIngestor, AtopMessage, ATOP_V1_SPEC};
 pub use events::{EventBus, OrchestratorEvent};
+pub use claude_settings::{
+    cli_login_marker_present, credentials_ready, decrypt_settings_api_key, encrypt_api_key,
+    load_or_create_master_key, mask_api_key, ClaudeSettings, ClaudeSettingsView, CredentialMode,
+    LaunchEnv,
+};
 pub use store::{SqliteStore, Store, new_agent_run};
 pub use supervisor::Supervisor;
