@@ -1,10 +1,7 @@
 use axum::body::Body;
 use http_body_util::BodyExt;
-use orchestrator_core::events::{EventBus, OrchestratorEvent};
-use orchestrator_core::store::SqliteStore;
-use orchestrator_core::supervisor::Supervisor;
+use orchestrator_core::events::OrchestratorEvent;
 use serde_json::json;
-use std::sync::Arc;
 use tempfile::tempdir;
 use tower::ServiceExt;
 
@@ -20,14 +17,7 @@ async fn test_state(dir: &tempfile::TempDir) -> AppState {
         data_dir: dir.path().to_path_buf(),
         static_dir: None,
     };
-    let db_url = config.database_url();
-    let store = SqliteStore::connect(&db_url).await.unwrap();
-    AppState {
-        config: Arc::new(config),
-        store: Arc::new(store),
-        supervisor: Arc::new(Supervisor::new()),
-        events: EventBus::default(),
-    }
+    AppState::new(config).await.unwrap()
 }
 
 #[tokio::test]

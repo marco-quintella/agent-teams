@@ -32,15 +32,32 @@ pub async fn list_plugins() -> Result<()> {
 }
 
 pub async fn doctor() -> Result<()> {
+    use std::process::Command;
+
     println!("orchestrator-server {}", env!("CARGO_PKG_VERSION"));
-    println!(
-        "claude CLI: {}",
-        if ClaudeCodeAgent::is_available() {
-            "found on PATH"
-        } else {
-            "not found"
+    if ClaudeCodeAgent::is_available() {
+        println!("claude CLI: found on PATH");
+        if let Ok(agent) = ClaudeCodeAgent::new() {
+            match Command::new(agent.executable_path())
+                .arg("--version")
+                .output()
+            {
+                Ok(out) => {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let version = stdout.trim();
+                    if version.is_empty() {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        println!("claude --version: {}", stderr.trim());
+                    } else {
+                        println!("claude --version: {version}");
+                    }
+                }
+                Err(e) => println!("claude --version failed: {e}"),
+            }
         }
-    );
+    } else {
+        println!("claude CLI: not found");
+    }
     Ok(())
 }
 
