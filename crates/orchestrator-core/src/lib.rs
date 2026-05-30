@@ -8,6 +8,7 @@ pub mod domain;
 pub mod error;
 pub mod events;
 pub mod orchestration;
+pub mod paths;
 pub mod plugins;
 pub mod state;
 pub mod store;
@@ -32,5 +33,6 @@ pub use claude_settings::{
     load_or_create_master_key, mask_api_key, ClaudeSettings, ClaudeSettingsView, CredentialMode,
     LaunchEnv,
 };
+pub use paths::expand_tilde_path;
 pub use store::{SqliteStore, Store, new_agent_run};
 pub use supervisor::Supervisor;

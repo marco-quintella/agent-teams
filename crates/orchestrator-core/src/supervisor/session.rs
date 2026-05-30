@@ -53,6 +53,14 @@ impl MemberSession {
         if cfg!(windows) {
             cmd.env("TERM", "xterm-256color");
         }
+        // Avoid inheriting API keys from the orchestrator server process (interactive Claude prompt).
+        for key in [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
+        ] {
+            cmd.env_remove(key);
+        }
         for (k, v) in extra_env {
             cmd.env(k, v);
         }
