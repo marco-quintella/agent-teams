@@ -1,0 +1,31 @@
+name: "basic-analysis"
+version: "1.0"
+description: "Basic workflow demonstrating agent orchestration"
+
+agents:
+  - id: "analyzer"
+    type: "ClaudeCode"
+    config:
+      model: "claude-3-sonnet-20240229"
+
+steps:
+  - type: "Run"
+    agent: "analyzer"
+    input:
+      prompt: "Analyze the code structure in the current directory"
+    output_var: "analysis_result"
+
+  - type: "Conditional"
+    condition: "analysis_result.stdout.contains('error')"
+    true_steps:
+      - type: "Run"
+        agent: "analyzer"
+        input:
+          prompt: "Fix the errors found in the analysis"
+        output_var: "fix_result"
+    false_steps:
+      - type: "Run"
+        agent: "analyzer"
+        input:
+          prompt: "Code looks good! Any suggestions for improvement?"
+        output_var: "suggestions"
