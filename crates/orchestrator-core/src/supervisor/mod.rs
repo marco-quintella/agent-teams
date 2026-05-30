@@ -11,6 +11,7 @@ use chrono::Utc;
 use crate::agents::ClaudeCodeAgent;
 use crate::domain::{AgentRun, AgentRunStatus, MemberRole, TeamMember};
 use crate::events::{EventBus, OrchestratorEvent};
+use crate::claude_settings::LaunchEnv;
 use crate::store::{Store, new_agent_run};
 
 pub use bootstrap::{build_role_markdown, claude_spawn_args, format_objective_envelope, format_session_bootstrap};
@@ -53,6 +54,7 @@ impl Supervisor {
         atop_spec: &str,
         mock_command: Option<(&Path, &[String])>,
         task_count: usize,
+        launch_env: LaunchEnv,
     ) -> anyhow::Result<AgentRun> {
         if self.sessions.contains_key(&member.id) {
             anyhow::bail!("member {} already has a live session", member.id);
@@ -80,6 +82,10 @@ impl Supervisor {
         let team_id = team_id.to_string();
         let member_id = member.id.clone();
         let bootstrap = format_session_bootstrap(&workspace, task_count);
+        let env_pairs: Vec<(String, String)> = launch_env
+            .vars
+            .into_iter()
+            .collect();
 
         let session = tokio::task::spawn_blocking(move || {
             let session = MemberSession::spawn(
@@ -89,6 +95,7 @@ impl Supervisor {
                 &cmd_path,
                 &args,
                 &role_md,
+                &env_pairs,
             )?;
             session.write_stdin(&bootstrap)?;
             Ok::<Arc<MemberSession>, anyhow::Error>(Arc::new(session))
@@ -148,6 +155,18 @@ impl Supervisor {
         let Some(session) = self.sessions.get(member_id) else {
             return Ok(());
         };
+        if !session.is_alive() {
+            drop(session);
+            self.sessions.remove(member_id);
+            if let Some(mut run) = store.get_agent_run_for_member(member_id).await? {
+                run.status = AgentRunStatus::Error;
+                run.stopped_at = Some(Utc::now());
+                run.updated_at = Utc::now();
+                store.upsert_agent_run(&run).await?;
+                events.publish(OrchestratorEvent::AgentRunUpdated { run });
+            }
+            return Ok(());
+        }
         if let Some(mut run) = store.get_agent_run_for_member(member_id).await? {
             run.last_output_snippet = session.last_output_snippet().await;
             run.updated_at = Utc::now();
@@ -175,7 +194,16 @@ impl Supervisor {
             .sessions
             .get(&lead.id)
             .ok_or_else(|| anyhow::anyhow!("lead session is not running"))?;
-        session.write_stdin(text)?;
+        if !session.is_alive() {
+            anyhow::bail!("lead session is not running (child process exited)");
+        }
+        session.write_stdin(text).map_err(|e| {
+            if e.to_string().contains("closed") {
+                anyhow::anyhow!("lead session is not running (PTY stdin closed)")
+            } else {
+                e
+            }
+        })?;
         Ok(())
     }
 

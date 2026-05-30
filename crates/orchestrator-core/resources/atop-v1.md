@@ -2,7 +2,7 @@
 
 Append **one JSON object per line** to `protocol.ndjson` (no array wrapper).
 
-**Lead:** when the operator sends an `[orchestrator-objective]` message, append a `task.create` line first so the kanban board updates.
+**Lead:** when the operator asks for board or task changes, use ATOP (`task.create`, etc.). For other objectives, respond in session; use ATOP only when it matches what was asked.
 
 ## Operations
 

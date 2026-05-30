@@ -28,6 +28,7 @@ impl MemberSession {
         command: &Path,
         args: &[String],
         role_markdown: &str,
+        extra_env: &[(String, String)],
     ) -> anyhow::Result<Self> {
         let workspace = MemberWorkspace::new(project_root, team_id, member_id);
         std::fs::create_dir_all(&workspace.root)?;
@@ -51,6 +52,9 @@ impl MemberSession {
         cmd.cwd(project_root);
         if cfg!(windows) {
             cmd.env("TERM", "xterm-256color");
+        }
+        for (k, v) in extra_env {
+            cmd.env(k, v);
         }
 
         let child = pair.slave.spawn_command(cmd)?;
@@ -145,13 +149,29 @@ impl MemberSession {
         }
     }
 
-    pub fn status_hint(&self) -> AgentRunStatus {
-        let running = self
-            .child
+    pub fn is_alive(&self) -> bool {
+        let stdin_open = self
+            .stdin_writer
             .lock()
             .map(|g| g.is_some())
             .unwrap_or(false);
-        if running {
+        if !stdin_open {
+            return false;
+        }
+        let Ok(mut guard) = self.child.lock() else {
+            return false;
+        };
+        let Some(child) = guard.as_mut() else {
+            return false;
+        };
+        match child.try_wait() {
+            Ok(None) => true,
+            _ => false,
+        }
+    }
+
+    pub fn status_hint(&self) -> AgentRunStatus {
+        if self.is_alive() {
             AgentRunStatus::Running
         } else {
             AgentRunStatus::Stopped

@@ -4,6 +4,7 @@ use orchestrator_core::atop::ATOP_V1_SPEC;
 use orchestrator_core::domain::{AgentRunStatus, MemberRole};
 use orchestrator_core::events::EventBus;
 use orchestrator_core::store::{SqliteStore, Store};
+use orchestrator_core::claude_settings::LaunchEnv;
 use orchestrator_core::supervisor::Supervisor;
 use tempfile::tempdir;
 
@@ -53,6 +54,7 @@ async fn supervisor_spawns_and_stops_mock_child() {
             ATOP_V1_SPEC,
             Some((&cmd, &args)),
             0,
+            LaunchEnv::default(),
         )
         .await
         .unwrap();

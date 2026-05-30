@@ -28,7 +28,7 @@ pub fn build_role_markdown(
     let inbound_path = workspace.inbound_file.display();
 
     let lead_atop_directive = if member.role == MemberRole::Lead {
-        "\n## Lead protocol duty\n\nWhen the operator sends an `[orchestrator-objective]` message, your **first** action is to append a `task.create` line to the protocol file with a title that reflects the objective. Use Bash to append one JSON line per the ATOP spec. You may follow with `task.assign` to workers when appropriate.\n"
+        "\n## Lead protocol duty\n\nWhen the operator asks you to create, track, or update work on the kanban board, use ATOP (`task.create`, `task.update_status`, `task.assign`) as appropriate. For other objectives, respond in the session first; use ATOP only when board changes match what was asked.\n"
     } else {
         ""
     };
@@ -98,7 +98,7 @@ pub fn format_objective_envelope(tasks: &[Task], objective: &str) -> String {
     lines.push(objective.to_string());
     lines.push(String::new());
     lines.push(
-        "Respond by appending a task.create JSON line to your protocol file (see role.md)."
+        "Use ATOP when appropriate to the operator request (see role.md for protocol path)."
             .to_string(),
     );
 
@@ -152,7 +152,8 @@ mod tests {
             created_at: Utc::now(),
         };
         let md = build_role_markdown(&member, "Ship V1.1", "spec", &ws);
-        assert!(md.contains("task.create"));
+        assert!(md.contains("ATOP"));
+        assert!(!md.to_lowercase().contains("first** action"));
         assert!(md.contains(&ws.protocol_file.display().to_string()));
     }
 }
