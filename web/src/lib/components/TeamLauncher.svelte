@@ -27,6 +27,7 @@
   let messageBusy = $state(false);
   let browseBusy = $state(false);
   let browseError = $state('');
+  let messageHint = $state<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   async function refreshTeams() {
     teamsLoading = true;
@@ -172,12 +173,30 @@
     const tid = $teamId;
     if (!tid || !messageText.trim()) return;
     messageBusy = true;
+    messageHint = null;
     lastError.set(null);
     try {
       await api.sendMessage(tid, messageText.trim());
       messageText = '';
+      messageHint = {
+        kind: 'ok',
+        text: 'Message sent to the lead session.',
+      };
     } catch (e) {
-      lastError.set(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      const offline =
+        msg.includes('not running') || msg.includes('409') || msg.includes('CONFLICT');
+      messageHint = {
+        kind: 'err',
+        text: offline
+          ? 'Lead session is offline. Click Launch / Relaunch team, then send again.'
+          : msg,
+      };
+      lastError.set(messageHint.text);
+      if (offline) {
+        await loadTeam(tid);
+        await refreshTeams();
+      }
     } finally {
       messageBusy = false;
     }
@@ -250,11 +269,23 @@
       </div>
       <p class="meta">Team id: <code>{$teamId}</code> {#if $launched}(running){/if}</p>
       <div class="message-row">
-        <input bind:value={messageText} placeholder="Message to lead" />
+        <input
+          bind:value={messageText}
+          placeholder="Message to lead"
+          onkeydown={(e) => e.key === 'Enter' && sendMessage()}
+        />
         <button type="button" disabled={!$launched || messageBusy} onclick={sendMessage}>
           {messageBusy ? 'Sending…' : 'Send'}
         </button>
       </div>
+      {#if messageHint}
+        <p class="message-hint" class:ok={messageHint.kind === 'ok'} class:err={messageHint.kind === 'err'}>
+          {messageHint.text}
+        </p>
+      {/if}
+      {#if !$launched}
+        <p class="meta">Launch the team before sending a message to the lead.</p>
+      {/if}
     </div>
   {:else}
     <div class="create-panel">
@@ -451,5 +482,15 @@
     font-size: 0.8rem;
     color: #f5a0a0;
     margin: 0;
+  }
+  .message-hint {
+    font-size: 0.8rem;
+    margin: 0.25rem 0 0;
+  }
+  .message-hint.ok {
+    color: #90c090;
+  }
+  .message-hint.err {
+    color: #f5a0a0;
   }
 </style>
