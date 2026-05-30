@@ -1,0 +1,19 @@
+[package]
+name = "orchestrator-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "HTTP server and CLI for claude-orchestrator"
+
+[[bin]]
+name = "orchestrator-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap = { version = "4.5", features = ["derive"] }
+orchestrator-core = { path = "../orchestrator-core" }
+serde_yaml.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
