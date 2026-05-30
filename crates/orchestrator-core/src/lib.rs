@@ -22,7 +22,7 @@ pub use config::{
 pub use orchestration::Orchestrator;
 pub use domain::{
     AgentRun, AgentRunStatus, MemberRole, Project, Task, TaskActor, TaskEvent, TaskStatus, Team,
-    TeamMember,
+    TeamMember, TeamRunStatus, TeamSummary,
 };
 pub use state::ExecutionContext;
 pub use atop::{AtopIngestor, AtopMessage, ATOP_V1_SPEC};

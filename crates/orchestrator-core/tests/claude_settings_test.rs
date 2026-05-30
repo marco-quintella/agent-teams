@@ -16,6 +16,7 @@ async fn claude_settings_roundtrip() {
     settings.credential_mode = CredentialMode::ApiKey;
     settings.api_key_ciphertext = Some(ct);
     settings.api_base_url = Some("https://openrouter.ai/api".into());
+    settings.default_model = Some("sonnet".into());
     store.upsert_claude_settings(&settings).await.unwrap();
 
     let loaded = store.get_claude_settings().await.unwrap();
@@ -25,4 +26,5 @@ async fn claude_settings_roundtrip() {
         loaded.api_base_url.as_deref(),
         Some("https://openrouter.ai/api")
     );
+    assert_eq!(loaded.default_model.as_deref(), Some("sonnet"));
 }

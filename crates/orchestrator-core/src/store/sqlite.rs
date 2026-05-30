@@ -8,7 +8,7 @@ use super::Store;
 use crate::claude_settings::{settings_row_id, CredentialMode, ClaudeSettings};
 use crate::domain::{
     AgentRun, AgentRunStatus, MemberRole, Project, Task, TaskActor, TaskEvent, TaskStatus, Team,
-    TeamMember, new_id,
+    TeamMember, TeamRunStatus, TeamSummary, new_id,
 };
 
 /// SQLite-backed store.
@@ -35,6 +35,9 @@ impl SqliteStore {
 #[async_trait]
 impl Store for SqliteStore {
     async fn create_project(&self, root_path: &str) -> anyhow::Result<Project> {
+        if let Some(existing) = self.find_project_by_root_path(root_path).await? {
+            return Ok(existing);
+        }
         let now = Utc::now();
         let project = Project {
             id: new_id(),
@@ -143,6 +146,40 @@ impl Store for SqliteStore {
                         .ok_or_else(|| anyhow::anyhow!("invalid role: {role_str}"))?,
                     role_prompt: r.get("role_prompt"),
                     created_at: SqliteStore::parse_dt(r.get::<String, _>("created_at").as_str())?,
+                })
+            })
+            .collect()
+    }
+
+    async fn list_teams(&self) -> anyhow::Result<Vec<TeamSummary>> {
+        let rows = sqlx::query(
+            "SELECT t.id, t.name, t.created_at, p.root_path AS project_root_path,
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM team_members tm
+                        INNER JOIN agent_runs ar ON ar.team_member_id = tm.id
+                        WHERE tm.team_id = t.id
+                          AND ar.status IN ('starting', 'running')
+                    ) THEN 'running' ELSE 'stopped' END AS run_status
+             FROM teams t
+             INNER JOIN projects p ON p.id = t.project_id
+             ORDER BY t.created_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|r| {
+                let status_str: String = r.get("run_status");
+                let status = match status_str.as_str() {
+                    "running" => TeamRunStatus::Running,
+                    _ => TeamRunStatus::Stopped,
+                };
+                Ok(TeamSummary {
+                    id: r.get("id"),
+                    name: r.get("name"),
+                    project_root_path: r.get("project_root_path"),
+                    created_at: Self::parse_dt(r.get::<String, _>("created_at").as_str())?,
+                    status,
                 })
             })
             .collect()
@@ -351,7 +388,7 @@ impl Store for SqliteStore {
 
     async fn get_claude_settings(&self) -> anyhow::Result<ClaudeSettings> {
         let row = sqlx::query(
-            "SELECT credential_mode, api_key_ciphertext, api_base_url, updated_at
+            "SELECT credential_mode, api_key_ciphertext, api_base_url, default_model, updated_at
              FROM claude_settings WHERE id = ?",
         )
         .bind(settings_row_id())
@@ -363,6 +400,7 @@ impl Store for SqliteStore {
                 credential_mode: CredentialMode::CliLogin,
                 api_key_ciphertext: None,
                 api_base_url: None,
+                default_model: None,
                 updated_at: Utc::now(),
             });
         };
@@ -373,24 +411,27 @@ impl Store for SqliteStore {
                 .ok_or_else(|| anyhow::anyhow!("invalid credential_mode: {mode_str}"))?,
             api_key_ciphertext: r.get("api_key_ciphertext"),
             api_base_url: r.get("api_base_url"),
+            default_model: r.get("default_model"),
             updated_at: Self::parse_dt(r.get::<String, _>("updated_at").as_str())?,
         })
     }
 
     async fn upsert_claude_settings(&self, settings: &ClaudeSettings) -> anyhow::Result<()> {
         sqlx::query(
-            "INSERT INTO claude_settings (id, credential_mode, api_key_ciphertext, api_base_url, updated_at)
-             VALUES (?, ?, ?, ?, ?)
+            "INSERT INTO claude_settings (id, credential_mode, api_key_ciphertext, api_base_url, default_model, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                credential_mode = excluded.credential_mode,
                api_key_ciphertext = excluded.api_key_ciphertext,
                api_base_url = excluded.api_base_url,
+               default_model = excluded.default_model,
                updated_at = excluded.updated_at",
         )
         .bind(settings_row_id())
         .bind(settings.credential_mode.as_str())
         .bind(&settings.api_key_ciphertext)
         .bind(&settings.api_base_url)
+        .bind(&settings.default_model)
         .bind(settings.updated_at.to_rfc3339())
         .execute(&self.pool)
         .await?;
@@ -399,6 +440,19 @@ impl Store for SqliteStore {
 }
 
 impl SqliteStore {
+    async fn find_project_by_root_path(&self, root_path: &str) -> anyhow::Result<Option<Project>> {
+        let row = sqlx::query("SELECT id, root_path, created_at FROM projects WHERE root_path = ?")
+            .bind(root_path)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|r| Project {
+            id: r.get("id"),
+            root_path: r.get("root_path"),
+            created_at: Self::parse_dt(r.get::<String, _>("created_at").as_str())
+                .unwrap_or_else(|_| Utc::now()),
+        }))
+    }
+
     fn row_to_task(r: sqlx::sqlite::SqliteRow) -> anyhow::Result<Task> {
         let status_str: String = r.get("status");
         let created_by_str: String = r.get("created_by");

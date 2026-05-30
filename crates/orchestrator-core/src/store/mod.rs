@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::claude_settings::ClaudeSettings;
 use crate::domain::{
     AgentRun, AgentRunStatus, MemberRole, Project, Task, TaskActor, TaskEvent, TaskStatus, Team,
-    TeamMember, new_id,
+    TeamMember, TeamSummary, new_id,
 };
 
 pub use sqlite::SqliteStore;
@@ -34,6 +34,8 @@ pub trait Store: Send + Sync {
     async fn list_team_members(&self, team_id: &str) -> anyhow::Result<Vec<TeamMember>>;
 
     async fn get_team(&self, team_id: &str) -> anyhow::Result<Option<Team>>;
+
+    async fn list_teams(&self) -> anyhow::Result<Vec<TeamSummary>>;
 
     async fn get_task(&self, task_id: &str) -> anyhow::Result<Option<Task>>;
 

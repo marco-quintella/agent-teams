@@ -55,6 +55,7 @@ impl Supervisor {
         mock_command: Option<(&Path, &[String])>,
         task_count: usize,
         launch_env: LaunchEnv,
+        default_model: Option<String>,
     ) -> anyhow::Result<AgentRun> {
         if self.sessions.contains_key(&member.id) {
             anyhow::bail!("member {} already has a live session", member.id);
@@ -74,7 +75,11 @@ impl Supervisor {
                 .claude_path
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("Claude CLI not found on PATH"))?;
-            let spawn_args = claude_spawn_args(&workspace.role_file, project_root);
+            let spawn_args = claude_spawn_args(
+                &workspace.role_file,
+                project_root,
+                default_model.as_deref(),
+            );
             (path, spawn_args)
         };
 

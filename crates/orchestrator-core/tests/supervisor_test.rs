@@ -55,6 +55,7 @@ async fn supervisor_spawns_and_stops_mock_child() {
             Some((&cmd, &args)),
             0,
             LaunchEnv::default(),
+            None,
         )
         .await
         .unwrap();

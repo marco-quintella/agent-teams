@@ -1,6 +1,4 @@
-use orchestrator_core::{
-    SqliteStore, Store, TaskActor, TaskStatus,
-};
+use orchestrator_core::{SqliteStore, Store, TaskActor, TaskStatus};
 
 #[tokio::test]
 async fn project_team_members_round_trip() {
@@ -91,6 +89,22 @@ async fn persistence_survives_reconnect() {
     let members = store.list_team_members(&team_id).await.unwrap();
     assert_eq!(members.len(), 1);
     assert_eq!(members[0].name, "lead");
+}
+
+#[tokio::test]
+async fn list_teams_includes_project_path() {
+    let store = temp_store().await;
+    let project = store.create_project("/tmp/v13-demo").await.unwrap();
+    let team = store
+        .create_team(&project.id, "Beta", "objective")
+        .await
+        .unwrap();
+
+    let list = store.list_teams().await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, team.id);
+    assert_eq!(list[0].project_root_path, "/tmp/v13-demo");
+    assert_eq!(list[0].status.as_str(), "stopped");
 }
 
 async fn temp_store() -> SqliteStore {

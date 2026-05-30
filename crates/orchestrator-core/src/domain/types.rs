@@ -122,6 +122,32 @@ pub struct Team {
     pub created_at: DateTime<Utc>,
 }
 
+/// Team row for launcher history (includes project path and run status).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamSummary {
+    pub id: String,
+    pub name: String,
+    pub project_root_path: String,
+    pub created_at: DateTime<Utc>,
+    pub status: TeamRunStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamRunStatus {
+    Running,
+    Stopped,
+}
+
+impl TeamRunStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Stopped => "stopped",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamMember {
     pub id: String,

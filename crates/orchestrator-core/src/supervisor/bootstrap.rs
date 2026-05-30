@@ -4,13 +4,22 @@ use crate::domain::{MemberRole, Task, TeamMember};
 use crate::supervisor::workspace::MemberWorkspace;
 
 /// Builds argv for a persistent interactive Claude Code session (no `-p` / `--version`).
-pub fn claude_spawn_args(role_file: &Path, project_root: &Path) -> Vec<String> {
-    vec![
+pub fn claude_spawn_args(
+    role_file: &Path,
+    project_root: &Path,
+    model: Option<&str>,
+) -> Vec<String> {
+    let mut args = vec![
         "--append-system-prompt-file".to_string(),
         role_file.to_string_lossy().into_owned(),
         "--add-dir".to_string(),
         project_root.to_string_lossy().into_owned(),
-    ]
+    ];
+    if let Some(m) = model.filter(|s| !s.trim().is_empty()) {
+        args.push("--model".to_string());
+        args.push(m.trim().to_string());
+    }
+    args
 }
 
 pub fn build_role_markdown(
@@ -114,11 +123,23 @@ mod tests {
 
     #[test]
     fn claude_spawn_args_exclude_print_and_version() {
-        let args = claude_spawn_args(Path::new("/proj/.orchestrator/role.md"), Path::new("/proj"));
+        let args = claude_spawn_args(Path::new("/proj/.orchestrator/role.md"), Path::new("/proj"), None);
         assert!(!args.iter().any(|a| a == "--version"));
         assert!(!args.iter().any(|a| a == "-p" || a == "--print"));
         assert!(args.contains(&"--append-system-prompt-file".to_string()));
         assert!(args.contains(&"--add-dir".to_string()));
+        assert!(!args.iter().any(|a| a == "--model"));
+    }
+
+    #[test]
+    fn claude_spawn_args_includes_model_when_set() {
+        let args = claude_spawn_args(
+            Path::new("/proj/.orchestrator/role.md"),
+            Path::new("/proj"),
+            Some("opus"),
+        );
+        assert!(args.contains(&"--model".to_string()));
+        assert!(args.contains(&"opus".to_string()));
     }
 
     #[test]

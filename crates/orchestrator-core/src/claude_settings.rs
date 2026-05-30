@@ -38,6 +38,7 @@ pub struct ClaudeSettings {
     pub credential_mode: CredentialMode,
     pub api_key_ciphertext: Option<Vec<u8>>,
     pub api_base_url: Option<String>,
+    pub default_model: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -46,6 +47,7 @@ pub struct ClaudeSettingsView {
     pub credential_mode: String,
     pub api_key_masked: Option<String>,
     pub api_base_url: Option<String>,
+    pub default_model: Option<String>,
     pub updated_at: String,
 }
 
