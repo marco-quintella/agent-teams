@@ -26,6 +26,11 @@ impl ClaudeCodeAgent {
     pub fn is_available() -> bool {
         which::which("claude").is_ok() || which::which("claude-code").is_ok()
     }
+
+    /// Resolved Claude Code executable path.
+    pub fn executable_path(&self) -> &std::path::Path {
+        self.cli_path.as_path()
+    }
 }
 
 #[async_trait]

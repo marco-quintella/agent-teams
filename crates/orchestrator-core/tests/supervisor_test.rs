@@ -52,6 +52,7 @@ async fn supervisor_spawns_and_stops_mock_child() {
             &member,
             ATOP_V1_SPEC,
             Some((&cmd, &args)),
+            0,
         )
         .await
         .unwrap();

@@ -2,6 +2,8 @@
 
 Append **one JSON object per line** to `protocol.ndjson` (no array wrapper).
 
+**Lead:** when the operator sends an `[orchestrator-objective]` message, append a `task.create` line first so the kanban board updates.
+
 ## Operations
 
 ### `task.create`

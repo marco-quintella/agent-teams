@@ -15,6 +15,7 @@ pub struct MemberSession {
     pub member_id: String,
     pub workspace: MemberWorkspace,
     pub last_output: Arc<Mutex<String>>,
+    stdin_writer: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
     child: Arc<std::sync::Mutex<Option<Box<dyn portable_pty::Child + Send>>>>,
     reader_handle: Arc<std::sync::Mutex<Option<std::thread::JoinHandle<()>>>>,
 }
@@ -48,13 +49,18 @@ impl MemberSession {
             cmd.arg(arg);
         }
         cmd.cwd(project_root);
+        if cfg!(windows) {
+            cmd.env("TERM", "xterm-256color");
+        }
 
         let child = pair.slave.spawn_command(cmd)?;
-        let mut writer = pair.master.take_writer()?;
+        let writer = pair.master.take_writer()?;
         let mut reader = pair.master.try_clone_reader()?;
 
         let snippet = Arc::new(Mutex::new(String::new()));
         let snippet_reader = Arc::clone(&snippet);
+        let stdin_writer: Arc<Mutex<Option<Box<dyn Write + Send>>>> =
+            Arc::new(Mutex::new(Some(writer)));
 
         let reader_handle = std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
@@ -76,13 +82,11 @@ impl MemberSession {
             }
         });
 
-        let _ = writeln!(writer, "--- orchestrator session ready ---");
-        let _ = writer.flush();
-
         Ok(Self {
             member_id: member_id.to_string(),
             workspace,
             last_output: snippet,
+            stdin_writer,
             child: Arc::new(std::sync::Mutex::new(Some(child))),
             reader_handle: Arc::new(std::sync::Mutex::new(Some(reader_handle))),
         })
@@ -95,19 +99,39 @@ impl MemberSession {
             .unwrap_or_default()
     }
 
+    /// Writes to the live PTY and appends the same text to the inbound audit file.
     pub fn write_stdin(&self, text: &str) -> anyhow::Result<()> {
-        // PTY writer is not retained in V1; inbound is appended to file for next restart.
+        let payload = if text.ends_with('\n') {
+            text.to_string()
+        } else {
+            format!("{text}\n")
+        };
+
+        {
+            let mut guard = self
+                .stdin_writer
+                .lock()
+                .map_err(|_| anyhow::anyhow!("stdin writer lock poisoned"))?;
+            let writer = guard
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("PTY stdin writer is closed"))?;
+            writer.write_all(payload.as_bytes())?;
+            writer.flush()?;
+        }
+
         let mut content = String::new();
         if self.workspace.inbound_file.exists() {
             content = std::fs::read_to_string(&self.workspace.inbound_file)?;
         }
-        content.push_str(text);
-        content.push('\n');
+        content.push_str(&payload);
         std::fs::write(&self.workspace.inbound_file, content)?;
         Ok(())
     }
 
     pub fn stop(&self) {
+        if let Ok(mut guard) = self.stdin_writer.lock() {
+            guard.take();
+        }
         if let Ok(mut guard) = self.child.lock() {
             if let Some(mut child) = guard.take() {
                 let _ = child.kill();

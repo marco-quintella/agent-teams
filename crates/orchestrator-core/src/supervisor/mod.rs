@@ -1,3 +1,4 @@
+mod bootstrap;
 mod session;
 mod workspace;
 
@@ -12,6 +13,7 @@ use crate::domain::{AgentRun, AgentRunStatus, MemberRole, TeamMember};
 use crate::events::{EventBus, OrchestratorEvent};
 use crate::store::{Store, new_agent_run};
 
+pub use bootstrap::{build_role_markdown, claude_spawn_args, format_objective_envelope, format_session_bootstrap};
 pub use session::MemberSession;
 pub use workspace::MemberWorkspace;
 
@@ -35,20 +37,8 @@ impl Supervisor {
         self.claude_path.is_some()
     }
 
-    fn build_role_markdown(
-        member: &TeamMember,
-        team_prompt: &str,
-        atop_spec: &str,
-    ) -> String {
-        format!(
-            "# Role: {} ({})\n\n## Team objective\n{team_prompt}\n\n## Member focus\n{}\n\n## ATOP\n{atop_spec}\n",
-            member.name,
-            match member.role {
-                MemberRole::Lead => "lead",
-                MemberRole::Worker => "worker",
-            },
-            member.role_prompt,
-        )
+    pub fn has_live_session(&self, member_id: &str) -> bool {
+        self.sessions.contains_key(member_id)
     }
 
     /// Spawns a teammate process and records agent run state.
@@ -62,6 +52,7 @@ impl Supervisor {
         member: &TeamMember,
         atop_spec: &str,
         mock_command: Option<(&Path, &[String])>,
+        task_count: usize,
     ) -> anyhow::Result<AgentRun> {
         if self.sessions.contains_key(&member.id) {
             anyhow::bail!("member {} already has a live session", member.id);
@@ -71,7 +62,8 @@ impl Supervisor {
         run.status = AgentRunStatus::Starting;
         store.upsert_agent_run(&run).await?;
 
-        let role_md = Self::build_role_markdown(member, team_prompt, atop_spec);
+        let workspace = MemberWorkspace::new(project_root, team_id, &member.id);
+        let role_md = build_role_markdown(member, team_prompt, atop_spec, &workspace);
 
         let (cmd_path, args): (PathBuf, Vec<String>) = if let Some((path, args)) = mock_command {
             (path.to_path_buf(), args.to_vec())
@@ -80,23 +72,34 @@ impl Supervisor {
                 .claude_path
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("Claude CLI not found on PATH"))?;
-            (path, vec!["--version".to_string()])
+            let spawn_args = claude_spawn_args(&workspace.role_file, project_root);
+            (path, spawn_args)
         };
 
-        let session = Arc::new(MemberSession::spawn(
-            project_root,
-            team_id,
-            &member.id,
-            &cmd_path,
-            &args,
-            &role_md,
-        )?);
+        let project_root = project_root.to_path_buf();
+        let team_id = team_id.to_string();
+        let member_id = member.id.clone();
+        let bootstrap = format_session_bootstrap(&workspace, task_count);
 
-        self.sessions.insert(member.id.clone(), Arc::clone(&session));
+        let session = tokio::task::spawn_blocking(move || {
+            let session = MemberSession::spawn(
+                &project_root,
+                &team_id,
+                &member_id,
+                &cmd_path,
+                &args,
+                &role_md,
+            )?;
+            session.write_stdin(&bootstrap)?;
+            Ok::<Arc<MemberSession>, anyhow::Error>(Arc::new(session))
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("spawn task join failed: {e}"))??;
 
         run.status = AgentRunStatus::Running;
         run.pid = None;
         run.last_output_snippet = session.last_output_snippet().await;
+        self.sessions.insert(member.id.clone(), session);
         run.updated_at = Utc::now();
         store.upsert_agent_run(&run).await?;
         events.publish(OrchestratorEvent::AgentRunUpdated { run: run.clone() });
@@ -158,7 +161,7 @@ impl Supervisor {
         ClaudeCodeAgent::is_available()
     }
 
-    /// Appends operator text to the lead member's inbound channel.
+    /// Delivers text to the lead member's live PTY session.
     pub fn deliver_lead_message(
         &self,
         members: &[TeamMember],
@@ -178,6 +181,23 @@ impl Supervisor {
 
     pub fn has_live_sessions(&self, member_ids: &[String]) -> bool {
         member_ids.iter().any(|id| self.sessions.contains_key(id))
+    }
+
+    /// Stops every live session (used before launch to avoid orphaned Claude processes).
+    pub async fn stop_all_sessions<S: Store + ?Sized>(
+        &self,
+        store: &S,
+        events: &EventBus,
+    ) -> anyhow::Result<()> {
+        let member_ids: Vec<String> = self
+            .sessions
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect();
+        for member_id in member_ids {
+            self.stop_member(store, events, &member_id).await?;
+        }
+        Ok(())
     }
 }
 
