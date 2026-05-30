@@ -4,7 +4,7 @@ Local control plane for Claude Code agent teams with a web kanban UI.
 
 ## Status
 
-V1 backend and UI scaffold are in place:
+V1 control plane + **V1.1 session hardening** (interactive Claude per teammate, lead objectives via PTY, ATOP proof path):
 
 - `crates/orchestrator-core` — domain, SQLite, supervisor, ATOP ingestor
 - `crates/orchestrator-server` — REST API, WebSocket, `serve` command
@@ -84,14 +84,29 @@ Mount or inject Claude credentials the same way you would for Claude Code in Doc
 
 **V1 has no authentication.** Bind to loopback in dev. For production, put the service behind a reverse proxy with TLS and auth before exposing it on a VPS.
 
-## V1 limitations
+## V1.1 manual acceptance (localhost)
 
-- Supervisor spawns `claude --version` as a placeholder until long-running session flags are confirmed
-- Lead messages append to `inbound.md` (PTY stdin write is minimal)
+1. `cargo run -p orchestrator-server -- doctor` — Claude on PATH and version string.
+2. Start API + UI (`scripts/dev.ps1` or two terminals per **Development** above).
+3. Create project + team (lead + at least one worker), **Launch**.
+4. Send an objective to the lead (e.g. “Add a CONTRIBUTING.md with install steps”).
+5. Within ~5 minutes, confirm a new kanban card with `created_by=agent` (lead appended `task.create` to `protocol.ndjson`).
+6. **Stop** team — all sessions end within ~15s.
+
+Debug ATOP without Claude: append a line to `.orchestrator/teams/{team_id}/{member_id}/protocol.ndjson` per `crates/orchestrator-core/resources/atop-v1.md`.
+
+## Known limitations
+
 - No mailbox, code review UI, or multi-provider support
+- **No API authentication** — do not expose to the public internet without auth (V1.2+)
+- Workers launch real sessions but V1.1 proof is **lead creates task** only
+- ATOP adherence depends on Claude following role.md; use debug `echo` to protocol file if needed
 
 ## Docs
 
 - Requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1-requirements.md`
+- V1.1 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.1-requirements.md`
 - Plan: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`
-- Architecture (implemented V1): `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`
+- V1.1 plan: `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`
+- Architecture: `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`
+- V1.1 troubleshooting (API hang / PTY blocking): `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`

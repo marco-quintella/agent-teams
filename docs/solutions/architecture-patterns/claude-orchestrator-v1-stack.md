@@ -74,9 +74,11 @@ pub enum AtopMessage {
 ### Supervisor and sessions
 
 - **Supervisor** spawns children via `portable-pty`; mock command (`cmd /C echo` on Windows) used in tests.
-- **V1 placeholder:** real launch uses `claude --version` until long-running CLI flags are verified.
+- **V1.1 spawn:** interactive `claude` with `--append-system-prompt-file` and `--add-dir` (`claude_spawn_args` in `supervisor/bootstrap.rs`); no `-p` / `--version` placeholder.
+- **Blocking I/O:** PTY spawn, bootstrap `write_stdin`, and lead message delivery run in `tokio::task::spawn_blocking` so the Axum runtime stays responsive (see `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`).
 - Output ring buffer: last **2048** bytes in `MemberSession` (`std::sync::Mutex` in reader thread—do not use `tokio::RwLock` from blocking PTY reader).
-- Lead operator messages: `deliver_lead_message` appends to `inbound.md` (PTY writer not retained in V1).
+- Lead operator messages: `deliver_lead_message` writes to the live PTY **and** appends to `inbound.md` for audit.
+- Before relaunch, `stop_all_sessions()` clears orphaned sessions from prior teams.
 
 ### HTTP API surface
 
@@ -95,7 +97,8 @@ Launch is **idempotent-guarded**: second launch returns **409** if sessions alre
 ### Web UI
 
 - API client: `web/src/lib/api/client.ts` — `VITE_API_BASE` empty in prod (same origin).
-- State: Svelte stores in `web/src/lib/stores/orchestrator.ts` + WS merge.
+- State: Svelte stores in `web/src/lib/stores/orchestrator.ts` + WS merge; `resumeTeamIfStored()` restores the last team from `localStorage` after reload.
+- Launcher: separate `launchBusy` / `messageBusy` flags; kanban column counts and `{#key}` remount for dnd sync.
 - Kanban: `svelte-dnd-action`; PATCH on column drop.
 
 ### Commits and merge
@@ -176,11 +179,20 @@ docker compose -f docker/docker-compose.yml up --build
 ## Related
 
 - Requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1-requirements.md`
+- V1.1 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.1-requirements.md`
 - Plan: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`
+- V1.1 troubleshooting: `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`
 - ATOP spec: `crates/orchestrator-core/resources/atop-v1.md`
 
-## V1 gaps (intentional)
+## V1.1 delta (2026-05-30)
 
-- Persistent `claude` session invocation not finalized (`--version` placeholder)
-- `task.assign` via ATOP works; PTY stdin not wired for live lead chat
+- Spawn: interactive `claude` with `--append-system-prompt-file` + `--add-dir` (see `crates/orchestrator-core/src/supervisor/bootstrap.rs`)
+- Lead objectives: PTY stdin + `inbound.md` audit; envelope includes board snapshot (`format_objective_envelope`)
+- Snippet refresh: 3s loop while team is live (`app_state` + `CancellationToken`)
+- PTY spawn/message must use `tokio::task::spawn_blocking` — see `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`
+- Plan: `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`
+
+## Remaining gaps
+
 - No auth/TLS, mailbox, or multi-provider
+- ATOP adherence depends on Claude following role.md
