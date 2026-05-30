@@ -4,9 +4,18 @@
   import AgentStatusList from './lib/components/AgentStatusList.svelte';
   import KanbanBoard from './lib/components/KanbanBoard.svelte';
   import TeamLauncher from './lib/components/TeamLauncher.svelte';
-  import { connectionStatus, lastError, teamId } from './lib/stores/orchestrator';
+  import {
+    connectionStatus,
+    lastError,
+    launched,
+    members,
+    resumeTeamIfStored,
+    teamId,
+  } from './lib/stores/orchestrator';
 
   let health = $state<{ claude_on_path: boolean; profile: string } | null>(null);
+
+  const showGitWarning = $derived($launched && $members.length > 1);
 
   onMount(async () => {
     try {
@@ -14,6 +23,7 @@
     } catch {
       health = null;
     }
+    await resumeTeamIfStored();
   });
 </script>
 
@@ -32,6 +42,12 @@
   <aside class="banner">
     V1 has no authentication. Do not expose this UI on a public VPS without a reverse proxy and auth.
   </aside>
+
+  {#if showGitWarning}
+    <aside class="banner git-warn">
+      Multiple agents share one project checkout. Enable git worktree isolation before parallel edits (V1.1 does not enforce worktrees).
+    </aside>
+  {/if}
 
   {#if $lastError}
     <aside class="error">{$lastError}</aside>
@@ -94,6 +110,10 @@
     border-radius: 6px;
     font-size: 0.85rem;
     margin-bottom: 0.75rem;
+  }
+  .banner.git-warn {
+    background: #3a3010;
+    color: #e8d080;
   }
   .error {
     background: #4d1f1f;

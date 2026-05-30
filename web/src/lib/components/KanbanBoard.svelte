@@ -18,27 +18,36 @@
     review: [],
     done: [],
   });
+  let dragging = $state(false);
+  /** Bumps when task list changes so dnd zones re-bind items from the store. */
+  let boardKey = $state(0);
+
+  function syncColumnsFromStore(list: Task[]) {
+    columnItems.backlog = list.filter((t) => t.status === 'backlog');
+    columnItems.in_progress = list.filter((t) => t.status === 'in_progress');
+    columnItems.review = list.filter((t) => t.status === 'review');
+    columnItems.done = list.filter((t) => t.status === 'done');
+    boardKey += 1;
+  }
 
   $effect(() => {
     const list = $tasks;
-    columnItems = {
-      backlog: list.filter((t) => t.status === 'backlog'),
-      in_progress: list.filter((t) => t.status === 'in_progress'),
-      review: list.filter((t) => t.status === 'review'),
-      done: list.filter((t) => t.status === 'done'),
-    };
+    if (dragging) return;
+    syncColumnsFromStore(list);
   });
 
   function onConsider(status: TaskStatus) {
     return (e: CustomEvent<{ items: Task[] }>) => {
-      columnItems = { ...columnItems, [status]: e.detail.items };
+      dragging = true;
+      columnItems[status] = e.detail.items;
     };
   }
 
   async function onFinalize(status: TaskStatus, e: CustomEvent<{ items: Task[] }>) {
     const tid = $teamId;
+    dragging = false;
     if (!tid) return;
-    columnItems = { ...columnItems, [status]: e.detail.items };
+    columnItems[status] = e.detail.items;
     for (const task of e.detail.items) {
       if (task.status !== status) {
         await api.patchTask(tid, task.id, { status });
@@ -60,28 +69,39 @@
   <div class="kanban-toolbar">
     <input bind:value={newTitle} placeholder="New task title" onkeydown={(e) => e.key === 'Enter' && addTask()} />
     <button type="button" onclick={addTask}>Add task</button>
+    {#if $tasks.length > 0}
+      <span class="task-count">{$tasks.length} task(s)</span>
+    {/if}
   </div>
 
   <div class="columns">
     {#each columnDefs as col (col.id)}
       <div class="column">
-        <h3>{col.label}</h3>
-        <div
-          class="drop-zone"
-          use:dndzone={{ items: columnItems[col.id], flipDurationMs: 150 }}
-          onconsider={onConsider(col.id)}
-          onfinalize={(e) => onFinalize(col.id, e)}
-        >
-          {#each columnItems[col.id] as task (task.id)}
-            <article class="card">
-              <strong>{task.title}</strong>
-              {#if task.description}
-                <p>{task.description}</p>
-              {/if}
-              <small>{task.created_by}</small>
-            </article>
-          {/each}
-        </div>
+        <h3>{col.label} <span class="count">({columnItems[col.id].length})</span></h3>
+        {#key `${col.id}-${boardKey}`}
+          <div
+            class="drop-zone"
+            use:dndzone={{
+              items: columnItems[col.id],
+              flipDurationMs: 150,
+              type: col.id,
+            }}
+            onconsider={onConsider(col.id)}
+            onfinalize={(e) => onFinalize(col.id, e)}
+          >
+            {#each columnItems[col.id] as task (task.id)}
+              <article class="card" aria-label={task.title}>
+                <strong>{task.title}</strong>
+                {#if task.description}
+                  <p>{task.description}</p>
+                {/if}
+                <small>{task.created_by}</small>
+              </article>
+            {:else}
+              <p class="empty-col">No tasks</p>
+            {/each}
+          </div>
+        {/key}
       </div>
     {/each}
   </div>
@@ -91,11 +111,17 @@
   .kanban-toolbar {
     display: flex;
     gap: 0.5rem;
+    align-items: center;
     margin-bottom: 1rem;
   }
   .kanban-toolbar input {
     flex: 1;
     padding: 0.5rem;
+  }
+  .task-count {
+    font-size: 0.8rem;
+    color: #8b95a8;
+    white-space: nowrap;
   }
   .columns {
     display: grid;
@@ -115,8 +141,17 @@
     letter-spacing: 0.04em;
     color: #9aa3b2;
   }
+  .count {
+    font-weight: normal;
+    color: #6b7689;
+  }
   .drop-zone {
     min-height: 200px;
+  }
+  .empty-col {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #6b7689;
   }
   .card {
     background: #2a3140;

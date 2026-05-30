@@ -14,11 +14,13 @@
   let leadName = $state('Lead');
   let workerName = $state('Worker');
   let messageText = $state('');
-  let busy = $state(false);
+  let launchBusy = $state(false);
+  let messageBusy = $state(false);
 
   async function createAndLaunch() {
-    busy = true;
+    launchBusy = true;
     lastError.set(null);
+    let createdTeamId: string | null = null;
     try {
       const project = await api.createProject(projectPath);
       const team = await api.createTeam({
@@ -26,6 +28,7 @@
         name: teamName,
         provisioning_prompt: provisioningPrompt,
       });
+      createdTeamId = team.id;
       await api.addMember(team.id, {
         name: leadName,
         role: 'lead',
@@ -36,41 +39,49 @@
         role: 'worker',
         role_prompt: 'Implement assigned tasks and report status via ATOP.',
       });
-      teamId.set(team.id);
       connectWs();
       await api.launchTeam(team.id);
-      launched.set(true);
       await loadTeam(team.id);
     } catch (e) {
       lastError.set(e instanceof Error ? e.message : String(e));
+      if (createdTeamId) {
+        try {
+          await loadTeam(createdTeamId);
+        } catch {
+          // keep partial state visible when launch succeeded but UI sync failed
+        }
+      }
     } finally {
-      busy = false;
+      launchBusy = false;
     }
   }
 
   async function stopTeam() {
     const tid = $teamId;
     if (!tid) return;
-    busy = true;
+    launchBusy = true;
     try {
       await api.stopTeam(tid);
-      launched.set(false);
       await loadTeam(tid);
     } catch (e) {
       lastError.set(e instanceof Error ? e.message : String(e));
     } finally {
-      busy = false;
+      launchBusy = false;
     }
   }
 
   async function sendMessage() {
     const tid = $teamId;
     if (!tid || !messageText.trim()) return;
+    messageBusy = true;
+    lastError.set(null);
     try {
       await api.sendMessage(tid, messageText.trim());
       messageText = '';
     } catch (e) {
       lastError.set(e instanceof Error ? e.message : String(e));
+    } finally {
+      messageBusy = false;
     }
   }
 </script>
@@ -94,17 +105,19 @@
     <label>Worker <input bind:value={workerName} /></label>
   </div>
   <div class="actions">
-    <button type="button" disabled={busy || !projectPath} onclick={createAndLaunch}>
-      Launch team
+    <button type="button" disabled={launchBusy || !projectPath} onclick={createAndLaunch}>
+      {launchBusy ? 'Launching…' : 'Launch team'}
     </button>
-    <button type="button" disabled={busy || !$teamId} onclick={stopTeam}>Stop team</button>
+    <button type="button" disabled={launchBusy || !$teamId} onclick={stopTeam}>Stop team</button>
   </div>
 
   {#if $teamId}
     <p class="meta">Team id: <code>{$teamId}</code> {#if $launched}(running){/if}</p>
     <div class="message-row">
       <input bind:value={messageText} placeholder="Message to lead" />
-      <button type="button" disabled={!$launched} onclick={sendMessage}>Send</button>
+      <button type="button" disabled={!$launched || messageBusy} onclick={sendMessage}>
+        {messageBusy ? 'Sending…' : 'Send'}
+      </button>
     </div>
   {/if}
 </section>
