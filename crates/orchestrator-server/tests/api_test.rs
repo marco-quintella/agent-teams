@@ -178,6 +178,115 @@ async fn setup_doctor_and_settings_roundtrip() {
     let doctor2_json: serde_json::Value =
         serde_json::from_slice(&doctor2.into_body().collect().await.unwrap().to_bytes()).unwrap();
     assert_eq!(doctor2_json["credentials"]["ready"], true);
+    assert!(doctor2_json["model"].is_object());
+}
+
+#[tokio::test]
+async fn list_teams_after_create() {
+    let dir = tempdir().unwrap();
+    let state = test_state(&dir).await;
+    let app = routes::build_app(state);
+
+    let root = dir.path().to_str().unwrap();
+    let project_body = json!({ "root_path": root });
+    let project_resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/projects")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&project_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(project_resp.status(), 200);
+    let project_json: serde_json::Value =
+        serde_json::from_slice(&project_resp.into_body().collect().await.unwrap().to_bytes())
+            .unwrap();
+    let project_id = project_json["id"].as_str().unwrap();
+
+    let team_body = json!({
+        "project_id": project_id,
+        "name": "History Team",
+        "provisioning_prompt": "V1.3"
+    });
+    let team_resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/teams")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&team_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(team_resp.status(), 200);
+
+    let list_resp = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/teams")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_resp.status(), 200);
+    let list_json: Vec<serde_json::Value> =
+        serde_json::from_slice(&list_resp.into_body().collect().await.unwrap().to_bytes())
+            .unwrap();
+    assert_eq!(list_json.len(), 1);
+    assert_eq!(list_json[0]["name"], "History Team");
+    assert_eq!(list_json[0]["project_root_path"], root);
+    assert_eq!(list_json[0]["status"], "stopped");
+}
+
+#[tokio::test]
+async fn patch_default_model_roundtrip() {
+    let dir = tempdir().unwrap();
+    let state = test_state(&dir).await;
+    let app = routes::build_app(state);
+
+    let patch_body = json!({
+        "credential_mode": "cli_login",
+        "default_model": "opus"
+    });
+    let patch_resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("PATCH")
+                .uri("/api/setup/claude-settings")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&patch_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patch_resp.status(), 200);
+    let patch_json: serde_json::Value =
+        serde_json::from_slice(&patch_resp.into_body().collect().await.unwrap().to_bytes())
+            .unwrap();
+    assert_eq!(patch_json["default_model"], "opus");
+
+    let get_resp = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/setup/claude-settings")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let get_json: serde_json::Value =
+        serde_json::from_slice(&get_resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(get_json["default_model"], "opus");
 }
 
 #[tokio::test]

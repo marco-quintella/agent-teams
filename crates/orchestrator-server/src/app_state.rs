@@ -162,6 +162,7 @@ impl AppState {
                     None,
                     task_count,
                     launch_env.clone(),
+                    settings.default_model.clone(),
                 )
                 .await
                 .map_err(|e| {

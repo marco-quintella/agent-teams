@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use orchestrator_core::domain::{AgentRun, MemberRole, Team, TeamMember};
+use orchestrator_core::domain::{AgentRun, MemberRole, Team, TeamMember, TeamSummary};
 use orchestrator_core::Store;
 
 use crate::app_state::{AppState, LaunchError, MessageError};
@@ -32,13 +32,18 @@ pub struct TeamMessageBody {
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/teams", post(create_team))
+        .route("/teams", get(list_teams).post(create_team))
         .route("/teams/{team_id}/members", post(add_member))
         .route("/teams/{team_id}/launch", post(launch_team))
         .route("/teams/{team_id}/stop", post(stop_team))
         .route("/teams/{team_id}/message", post(team_message))
         .route("/teams/{team_id}/agent-runs", get(list_agent_runs))
         .route("/teams/{team_id}/members", get(list_members))
+}
+
+async fn list_teams(State(state): State<AppState>) -> Result<Json<Vec<TeamSummary>>, (StatusCode, String)> {
+    let teams = state.store.list_teams().await.map_err(internal)?;
+    Ok(Json(teams))
 }
 
 async fn list_members(

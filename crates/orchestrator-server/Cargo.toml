@@ -25,6 +25,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 dashmap.workspace = true
 tokio-util.workspace = true
+rfd = "0.15"
 
 [dev-dependencies]
 http-body-util = "0.1"
