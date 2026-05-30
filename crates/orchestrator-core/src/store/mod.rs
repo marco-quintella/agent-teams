@@ -1,5 +1,6 @@
 mod sqlite;
 
+use chrono::Utc;
 use async_trait::async_trait;
 use crate::domain::{
     AgentRun, AgentRunStatus, MemberRole, Project, Task, TaskActor, TaskEvent, TaskStatus, Team,
@@ -31,6 +32,10 @@ pub trait Store: Send + Sync {
 
     async fn list_team_members(&self, team_id: &str) -> anyhow::Result<Vec<TeamMember>>;
 
+    async fn get_team(&self, team_id: &str) -> anyhow::Result<Option<Team>>;
+
+    async fn get_task(&self, task_id: &str) -> anyhow::Result<Option<Task>>;
+
     async fn create_task(
         &self,
         team_id: &str,
@@ -45,6 +50,13 @@ pub trait Store: Send + Sync {
         &self,
         task_id: &str,
         status: TaskStatus,
+        actor: TaskActor,
+    ) -> anyhow::Result<Task>;
+
+    async fn assign_task(
+        &self,
+        task_id: &str,
+        assignee_member_id: Option<&str>,
         actor: TaskActor,
     ) -> anyhow::Result<Task>;
 

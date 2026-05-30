@@ -147,6 +147,33 @@ impl Store for SqliteStore {
             .collect()
     }
 
+    async fn get_team(&self, team_id: &str) -> anyhow::Result<Option<Team>> {
+        let row = sqlx::query(
+            "SELECT id, project_id, name, provisioning_prompt, created_at FROM teams WHERE id = ?",
+        )
+        .bind(team_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| Team {
+            id: r.get("id"),
+            project_id: r.get("project_id"),
+            name: r.get("name"),
+            provisioning_prompt: r.get("provisioning_prompt"),
+            created_at: Self::parse_dt(r.get::<String, _>("created_at").as_str())
+                .unwrap_or_else(|_| Utc::now()),
+        }))
+    }
+
+    async fn get_task(&self, task_id: &str) -> anyhow::Result<Option<Task>> {
+        let row = sqlx::query(
+            "SELECT id, team_id, title, description, status, assignee_member_id, created_by, created_at, updated_at FROM tasks WHERE id = ?",
+        )
+        .bind(task_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(|r| Self::row_to_task(r)).transpose()
+    }
+
     async fn create_task(
         &self,
         team_id: &str,
@@ -212,6 +239,29 @@ impl Store for SqliteStore {
         self.get_task(task_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("task not found after update"))
+    }
+
+    async fn assign_task(
+        &self,
+        task_id: &str,
+        assignee_member_id: Option<&str>,
+        actor: TaskActor,
+    ) -> anyhow::Result<Task> {
+        let now = Utc::now();
+        sqlx::query("UPDATE tasks SET assignee_member_id = ?, updated_at = ? WHERE id = ?")
+            .bind(assignee_member_id)
+            .bind(now.to_rfc3339())
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+
+        let payload = serde_json::json!({ "assignee": assignee_member_id }).to_string();
+        self.record_task_event(task_id, actor, "task.assigned", &payload)
+            .await?;
+
+        self.get_task(task_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("task not found after assign"))
     }
 
     async fn list_tasks(&self, team_id: &str) -> anyhow::Result<Vec<Task>> {
@@ -300,16 +350,6 @@ impl Store for SqliteStore {
 }
 
 impl SqliteStore {
-    async fn get_task(&self, task_id: &str) -> anyhow::Result<Option<Task>> {
-        let row = sqlx::query(
-            "SELECT id, team_id, title, description, status, assignee_member_id, created_by, created_at, updated_at FROM tasks WHERE id = ?",
-        )
-        .bind(task_id)
-        .fetch_optional(&self.pool)
-        .await?;
-        row.map(|r| Self::row_to_task(r)).transpose()
-    }
-
     fn row_to_task(r: sqlx::sqlite::SqliteRow) -> anyhow::Result<Task> {
         let status_str: String = r.get("status");
         let created_by_str: String = r.get("created_by");
