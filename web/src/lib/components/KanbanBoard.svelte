@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { Task, TaskStatus } from '../api/client';
   import { api } from '../api/client';
@@ -22,18 +23,30 @@
   /** Bumps when task list changes so dnd zones re-bind items from the store. */
   let boardKey = $state(0);
 
-  function syncColumnsFromStore(list: Task[]) {
-    columnItems.backlog = list.filter((t) => t.status === 'backlog');
-    columnItems.in_progress = list.filter((t) => t.status === 'in_progress');
-    columnItems.review = list.filter((t) => t.status === 'review');
-    columnItems.done = list.filter((t) => t.status === 'done');
-    boardKey += 1;
+  function columnsFromTasks(list: Task[]): Record<TaskStatus, Task[]> {
+    return {
+      backlog: list.filter((t) => t.status === 'backlog'),
+      in_progress: list.filter((t) => t.status === 'in_progress'),
+      review: list.filter((t) => t.status === 'review'),
+      done: list.filter((t) => t.status === 'done'),
+    };
+  }
+
+  function columnsSignature(cols: Record<TaskStatus, Task[]>): string {
+    return (['backlog', 'in_progress', 'review', 'done'] as const)
+      .map((s) => cols[s].map((t) => `${t.id}:${t.status}`).join(','))
+      .join('|');
   }
 
   $effect(() => {
     const list = $tasks;
     if (dragging) return;
-    syncColumnsFromStore(list);
+    const next = columnsFromTasks(list);
+    untrack(() => {
+      if (columnsSignature(columnItems) === columnsSignature(next)) return;
+      columnItems = next;
+      boardKey += 1;
+    });
   });
 
   function onConsider(status: TaskStatus) {

@@ -5,14 +5,7 @@
   import KanbanBoard from './lib/components/KanbanBoard.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import TeamLauncher from './lib/components/TeamLauncher.svelte';
-  import {
-    connectionStatus,
-    lastError,
-    launched,
-    members,
-    resumeTeamIfStored,
-    teamId,
-  } from './lib/stores/orchestrator';
+  import { connectionStatus, lastError, launched, members, teamId } from './lib/stores/orchestrator';
 
   let health = $state<{ claude_on_path: boolean; profile: string } | null>(null);
   let view = $state<'board' | 'settings'>('board');
@@ -25,7 +18,6 @@
     } catch {
       health = null;
     }
-    await resumeTeamIfStored();
   });
 </script>
 
@@ -75,7 +67,7 @@
         {#if $teamId}
           <KanbanBoard />
         {:else}
-          <p class="hint">Create and launch a team to open the kanban board.</p>
+          <p class="hint">Select or create a team to open the kanban board.</p>
         {/if}
       </div>
     </main>

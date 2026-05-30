@@ -6,8 +6,6 @@ export type WsEvent =
   | { type: 'agent_run_updated'; run: AgentRun }
   | { type: 'team_updated'; team_id: string };
 
-const TEAM_ID_STORAGE_KEY = 'orchestrator.activeTeamId';
-
 export const teamId = writable<string | null>(null);
 export const tasks = writable<Task[]>([]);
 export const members = writable<TeamMember[]>([]);
@@ -29,31 +27,10 @@ export async function loadTeam(id: string) {
     api.listAgentRuns(id),
   ]);
   teamId.set(id);
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(TEAM_ID_STORAGE_KEY, id);
-  }
   tasks.set(taskList);
   members.set(memberList);
   agentRuns.set(runs);
   launched.set(runs.some((r) => r.status === 'running' || r.status === 'starting'));
-}
-
-/** Restore last team from localStorage after page reload (best-effort). */
-export async function resumeTeamIfStored() {
-  if (typeof localStorage === 'undefined') return;
-  const stored = localStorage.getItem(TEAM_ID_STORAGE_KEY);
-  if (!stored) return;
-  try {
-    connectWs();
-    await loadTeam(stored);
-  } catch {
-    localStorage.removeItem(TEAM_ID_STORAGE_KEY);
-    teamId.set(null);
-    tasks.set([]);
-    members.set([]);
-    agentRuns.set([]);
-    launched.set(false);
-  }
 }
 
 export function connectWs() {

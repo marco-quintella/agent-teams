@@ -52,13 +52,23 @@ export interface DoctorResponse {
   orchestrator_version: string;
   cli: { found: boolean; version: string | null };
   credentials: { mode: string; ready: boolean; hint: string };
+  model: { default_model: string | null; hint: string };
 }
 
 export interface ClaudeSettingsView {
   credential_mode: string;
   api_key_masked: string | null;
   api_base_url: string | null;
+  default_model: string | null;
   updated_at: string;
+}
+
+export interface TeamSummary {
+  id: string;
+  name: string;
+  project_root_path: string;
+  created_at: string;
+  status: 'running' | 'stopped';
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -81,6 +91,8 @@ export const api = {
 
   createProject: (root_path: string) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify({ root_path }) }),
+
+  listTeams: () => request<TeamSummary[]>('/api/teams'),
 
   createTeam: (body: { project_id: string; name: string; provisioning_prompt: string }) =>
     request<Team>('/api/teams', { method: 'POST', body: JSON.stringify(body) }),
@@ -139,6 +151,7 @@ export const api = {
     credential_mode: string;
     api_key?: string;
     api_base_url?: string;
+    default_model?: string | null;
   }) =>
     request<ClaudeSettingsView>('/api/setup/claude-settings', {
       method: 'PATCH',
@@ -152,6 +165,12 @@ export const api = {
     request<{ ok: boolean; command: string; output: string }>('/api/setup/install-claude', {
       method: 'POST',
       body: JSON.stringify({ confirm }),
+    }),
+
+  browseDirectory: (body?: { initial_path?: string }) =>
+    request<{ path: string }>('/api/setup/browse-directory', {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
     }),
 };
 

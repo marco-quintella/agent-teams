@@ -7,6 +7,8 @@
   let credentialMode = $state<'cli_login' | 'api_key'>('cli_login');
   let apiKey = $state('');
   let apiBaseUrl = $state('');
+  let modelPreset = $state<'' | 'sonnet' | 'opus' | 'haiku' | 'custom'>('');
+  let customModel = $state('');
   let busy = $state(false);
   let message = $state('');
   let error = $state('');
@@ -18,6 +20,17 @@
       settings = await api.getClaudeSettings();
       credentialMode = settings.credential_mode as 'cli_login' | 'api_key';
       apiBaseUrl = settings.api_base_url ?? '';
+      const dm = settings.default_model ?? '';
+      if (!dm) {
+        modelPreset = '';
+        customModel = '';
+      } else if (dm === 'sonnet' || dm === 'opus' || dm === 'haiku') {
+        modelPreset = dm;
+        customModel = '';
+      } else {
+        modelPreset = 'custom';
+        customModel = dm;
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -30,10 +43,18 @@
     error = '';
     message = '';
     try {
+      const default_model =
+        modelPreset === 'custom'
+          ? customModel.trim() || null
+          : modelPreset === ''
+            ? null
+            : modelPreset;
+
       settings = await api.patchClaudeSettings({
         credential_mode: credentialMode,
         api_key: credentialMode === 'api_key' && apiKey.trim() ? apiKey.trim() : undefined,
         api_base_url: apiBaseUrl.trim() || undefined,
+        default_model,
       });
       apiKey = '';
       message = 'Settings saved.';
@@ -99,6 +120,7 @@
         {doctor.credentials.ready ? 'ready' : 'not ready'}
       </p>
       <p class="hint">{doctor.credentials.hint}</p>
+      <p class="hint">{doctor.model.hint}</p>
       {#if !doctor.cli.found}
         <button type="button" disabled={busy} onclick={installCli}>Install Claude CLI</button>
       {/if}
@@ -143,6 +165,28 @@
       <button type="button" class="secondary" disabled={busy} onclick={runCliLogin}>
         Run CLI login
       </button>
+    {/if}
+
+    <label>
+      <span>Default model (all team members)</span>
+      <select bind:value={modelPreset} disabled={busy}>
+        <option value="">CLI default</option>
+        <option value="sonnet">sonnet</option>
+        <option value="opus">opus</option>
+        <option value="haiku">haiku</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    {#if modelPreset === 'custom'}
+      <label>
+        <span>Custom model id</span>
+        <input
+          type="text"
+          bind:value={customModel}
+          placeholder="e.g. claude-sonnet-4-6"
+          disabled={busy}
+        />
+      </label>
     {/if}
 
     <button type="submit" disabled={busy}>Save</button>
