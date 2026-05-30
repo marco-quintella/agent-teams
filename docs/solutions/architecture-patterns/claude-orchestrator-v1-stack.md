@@ -180,6 +180,7 @@ docker compose -f docker/docker-compose.yml up --build
 
 - Requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1-requirements.md`
 - V1.1 requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.1-requirements.md`
+- V1.2 operator guide: `docs/solutions/developer-experience/orchestrator-v1.2-self-contained-localhost.md`
 - Plan: `docs/plans/2026-05-30-001-feat-agent-orchestrator-v1-plan.md`
 - V1.1 troubleshooting: `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`
 - ATOP spec: `crates/orchestrator-core/resources/atop-v1.md`
@@ -192,7 +193,18 @@ docker compose -f docker/docker-compose.yml up --build
 - PTY spawn/message must use `tokio::task::spawn_blocking` — see `docs/solutions/performance-issues/orchestrator-pty-blocking-tokio-runtime.md`
 - Plan: `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`
 
+## V1.2 delta (2026-05-30)
+
+Operational guide: `docs/solutions/developer-experience/orchestrator-v1.2-self-contained-localhost.md`
+
+- **Single-process localhost:** `web/dist` auto-mounted when present; `scripts/dev.ps1` builds UI then `serve` on `:47821`
+- **Settings API:** `/api/setup/doctor`, `/api/setup/claude-settings`, `/api/setup/claude-login`, `/api/setup/install-claude`
+- **Credentials:** SQLite `claude_settings` + ChaCha20-Poly1305 at rest (`.data/orchestrator.key`); spawn injects `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` in api_key mode
+- **Session health:** snippet refresh marks dead PTY children as `error`; lead message returns 409 when session gone
+- **Lead prompts:** conversational ATOP (no orchestrator protocol relay)
+- Plan: `docs/plans/2026-05-30-003-feat-agent-orchestrator-v1.2-plan.md`
+
 ## Remaining gaps
 
-- No auth/TLS, mailbox, or multi-provider
+- No orchestrator HTTP auth/TLS, mailbox, or multi-provider agents
 - ATOP adherence depends on Claude following role.md

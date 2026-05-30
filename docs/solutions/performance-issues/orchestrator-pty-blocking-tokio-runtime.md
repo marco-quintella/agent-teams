@@ -107,6 +107,7 @@ Tokio’s default multi-thread runtime expects async tasks not to block for seco
 ## Related Issues
 
 - Architecture overview: `docs/solutions/architecture-patterns/claude-orchestrator-v1-stack.md`
+- V1.2 operator loop (Settings, single-serve, session health): `docs/solutions/developer-experience/orchestrator-v1.2-self-contained-localhost.md`
 - Requirements: `docs/brainstorms/2026-05-30-agent-orchestrator-v1.1-requirements.md`
 - Plan: `docs/plans/2026-05-30-002-feat-agent-orchestrator-v1.1-plan.md`
 - README: `README.md` (Docs section)
