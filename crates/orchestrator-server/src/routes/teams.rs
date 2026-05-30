@@ -9,7 +9,7 @@ use serde::Deserialize;
 use orchestrator_core::domain::{AgentRun, MemberRole, Team, TeamMember};
 use orchestrator_core::Store;
 
-use crate::app_state::{AppState, LaunchError};
+use crate::app_state::{AppState, LaunchError, MessageError};
 
 #[derive(Deserialize)]
 pub struct CreateTeamBody {
@@ -120,6 +120,7 @@ async fn launch_team(
         LaunchError::NotFound => (StatusCode::NOT_FOUND, e.message()),
         LaunchError::Conflict => (StatusCode::CONFLICT, e.message()),
         LaunchError::ClaudeMissing => (StatusCode::SERVICE_UNAVAILABLE, e.message()),
+        LaunchError::CredentialsNotConfigured => (StatusCode::BAD_REQUEST, e.message()),
         LaunchError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
         LaunchError::Internal(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     })?;
@@ -145,10 +146,10 @@ async fn team_message(
     if state.store.get_team(&team_id).await.map_err(internal)?.is_none() {
         return Err((StatusCode::NOT_FOUND, "team not found".into()));
     }
-    state
-        .deliver_message(&team_id, &body.text)
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    state.deliver_message(&team_id, &body.text).await.map_err(|e| match &e {
+        MessageError::LeadSessionNotRunning(msg) => (e.status_code(), msg.clone()),
+        MessageError::Other(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }
 

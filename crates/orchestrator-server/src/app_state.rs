@@ -6,7 +6,10 @@ use dashmap::DashMap;
 use orchestrator_core::atop::{AtopIngestor, ATOP_V1_SPEC};
 use orchestrator_core::events::EventBus;
 use orchestrator_core::store::{SqliteStore, Store};
-use orchestrator_core::supervisor::{format_objective_envelope, Supervisor, MemberWorkspace};
+use orchestrator_core::{
+    credentials_ready, decrypt_settings_api_key, ClaudeSettings, CredentialMode, LaunchEnv,
+};
+use orchestrator_core::supervisor::{format_objective_envelope, MemberWorkspace, Supervisor};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::ServerConfig;
@@ -101,6 +104,17 @@ impl AppState {
 
         Self::validate_project_path(&project.root_path).map_err(LaunchError::BadRequest)?;
 
+        let settings = self
+            .store
+            .get_claude_settings()
+            .await
+            .map_err(LaunchError::Internal)?;
+        if !credentials_ready(&settings, &self.config.data_dir).map_err(LaunchError::Internal)? {
+            return Err(LaunchError::CredentialsNotConfigured);
+        }
+        let launch_env = build_launch_env(&settings, &self.config.data_dir)
+            .map_err(LaunchError::Internal)?;
+
         let members = self
             .store
             .list_team_members(team_id)
@@ -147,6 +161,7 @@ impl AppState {
                     ATOP_V1_SPEC,
                     None,
                     task_count,
+                    launch_env.clone(),
                 )
                 .await
                 .map_err(|e| {
@@ -189,17 +204,74 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn deliver_message(&self, team_id: &str, text: &str) -> anyhow::Result<()> {
-        let members = self.store.list_team_members(team_id).await?;
-        let tasks = self.store.list_tasks(team_id).await?;
+    pub async fn deliver_message(&self, team_id: &str, text: &str) -> Result<(), MessageError> {
+        let members = self
+            .store
+            .list_team_members(team_id)
+            .await
+            .map_err(MessageError::Other)?;
+        let tasks = self
+            .store
+            .list_tasks(team_id)
+            .await
+            .map_err(MessageError::Other)?;
         let envelope = format_objective_envelope(&tasks, text);
         let supervisor = Arc::clone(&self.supervisor);
 
         tokio::task::spawn_blocking(move || supervisor.deliver_lead_message(&members, &envelope))
             .await
-            .map_err(|e| anyhow::anyhow!("message delivery task join failed: {e}"))??;
+            .map_err(|e| {
+                MessageError::Other(anyhow::anyhow!("message delivery task join failed: {e}"))
+            })?
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("not running") || msg.contains("closed") {
+                    MessageError::LeadSessionNotRunning(msg)
+                } else {
+                    MessageError::Other(e)
+                }
+            })?;
 
         Ok(())
+    }
+}
+
+fn build_launch_env(
+    settings: &ClaudeSettings,
+    data_dir: &std::path::Path,
+) -> anyhow::Result<LaunchEnv> {
+    if settings.credential_mode == CredentialMode::ApiKey {
+        let key = decrypt_settings_api_key(settings, data_dir)?
+            .ok_or_else(|| anyhow::anyhow!("api_key mode without stored key"))?;
+        Ok(LaunchEnv::from_api_key(
+            &key,
+            settings.api_base_url.as_deref(),
+        ))
+    } else {
+        Ok(LaunchEnv::default())
+    }
+}
+
+#[derive(Debug)]
+pub enum MessageError {
+    LeadSessionNotRunning(String),
+    Other(anyhow::Error),
+}
+
+impl MessageError {
+    pub fn status_code(&self) -> axum::http::StatusCode {
+        use axum::http::StatusCode;
+        match self {
+            Self::LeadSessionNotRunning(_) => StatusCode::CONFLICT,
+            Self::Other(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            Self::LeadSessionNotRunning(m) => m.clone(),
+            Self::Other(e) => e.to_string(),
+        }
     }
 }
 
@@ -208,6 +280,7 @@ pub enum LaunchError {
     NotFound,
     Conflict,
     ClaudeMissing,
+    CredentialsNotConfigured,
     BadRequest(String),
     Internal(anyhow::Error),
 }
@@ -219,6 +292,7 @@ impl LaunchError {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict => StatusCode::CONFLICT,
             Self::ClaudeMissing => StatusCode::SERVICE_UNAVAILABLE,
+            Self::CredentialsNotConfigured => StatusCode::BAD_REQUEST,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -229,6 +303,10 @@ impl LaunchError {
             Self::NotFound => "team or project not found".into(),
             Self::Conflict => "team already launched".into(),
             Self::ClaudeMissing => "claude CLI not found on PATH".into(),
+            Self::CredentialsNotConfigured => {
+                "Claude credentials not configured — open Settings and complete CLI login or API key"
+                    .into()
+            }
             Self::BadRequest(msg) => msg.clone(),
             Self::Internal(e) => e.to_string(),
         }

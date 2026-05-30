@@ -54,7 +54,10 @@ impl ServerConfig {
         let data_dir = std::env::var("ORCHESTRATOR_DATA_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from(".data"));
-        let static_dir = std::env::var("ORCHESTRATOR_STATIC_DIR").ok().map(PathBuf::from);
+        let static_dir = std::env::var("ORCHESTRATOR_STATIC_DIR")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| Self::detect_static_dir());
 
         Self {
             profile,
@@ -73,5 +76,31 @@ impl ServerConfig {
 
     pub fn socket_addr(&self) -> anyhow::Result<SocketAddr> {
         Ok(format!("{}:{}", self.bind_addr, self.port).parse()?)
+    }
+
+    /// Resolves `web/dist` when env is unset and a built UI exists (V1.2 single-process localhost).
+    fn detect_static_dir() -> Option<PathBuf> {
+        let vite_only = std::env::var("ORCHESTRATOR_UI")
+            .map(|v| v.eq_ignore_ascii_case("vite"))
+            .unwrap_or(false);
+        if vite_only {
+            return None;
+        }
+        let candidates = [
+            PathBuf::from("web/dist"),
+            PathBuf::from("../web/dist"),
+        ];
+        for dir in candidates {
+            if dir.join("index.html").exists() {
+                return Some(dir);
+            }
+        }
+        None
+    }
+
+    pub fn serves_static_ui(&self) -> bool {
+        self.static_dir
+            .as_ref()
+            .is_some_and(|d| d.join("index.html").exists())
     }
 }
