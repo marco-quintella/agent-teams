@@ -4,7 +4,7 @@ Local control plane for Claude Code agent teams with a web kanban UI.
 
 ## Status
 
-V1 control plane + **V1.1** session hardening + **V1.2** self-contained localhost + **V1.3** operator workspace (team history, folder browse, default model):
+V1 control plane + **V1.1** session hardening + **V1.2** self-contained localhost + **V1.3** operator workspace (team history, folder browse, default model). **Package version: 1.3.0** (`doctor` / `GET /api/health`). Git tags: `v1.1.0`, `v1.2.0`, `v1.3.0` on the corresponding milestone commits.
 
 - `crates/orchestrator-core` — domain, SQLite, supervisor, ATOP ingestor, Claude settings
 - `crates/orchestrator-server` — REST API, WebSocket, `serve` command
@@ -25,7 +25,7 @@ cargo test --workspace
 cd web && npm install && npm run build
 ```
 
-## Development (local) — V1.2 single process
+## Development (local) — single process (V1.2+)
 
 One command builds the UI and serves API + SPA on **http://127.0.0.1:47821**:
 
